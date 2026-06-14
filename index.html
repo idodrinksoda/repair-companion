@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Repair Session Companion</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+:root {
+--bg: #0d0f0e; --bg2: #141714; --bg3: #1a1e1b;
+--border: #2a302b; --border2: #3a4239;
+--phosphor: #39ff85; --phosphor-dim: #1a7a3d; --phosphor-muted: #0d3d1e;
+--amber: #f0a030; --amber-dim: #7a5018;
+--red: #e04040; --red-dim: #5a1a1a;
+--text: #c8d4c8; --text-dim: #6a7d6a; --text-bright: #e8f0e8;
+--mono: 'Courier New', 'Lucida Console', monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: var(--mono); font-size: 13px; min-height: 100vh; display: flex; flex-direction: column; }
+.topbar { background: var(--bg2); border-bottom: 1px solid var(--border); padding: 10px 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.topbar-brand { font-size: 11px; color: var(--phosphor); letter-spacing: 0.15em; text-transform: uppercase; white-space: nowrap; }
+.topbar-brand span { color: var(--text-dim); }
+.unit-select-wrap { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 180px; }
+.unit-select-wrap label { font-size: 11px; color: var(--text-dim); white-space: nowrap; }
+.unit-select-wrap select { background: var(--bg3); color: var(--text-bright); border: 1px solid var(--border); padding: 4px 8px; font-family: var(--mono); font-size: 12px; border-radius: 3px; flex: 1; }
+.btn { background: transparent; border: 1px solid var(--border2); color: var(--text); padding: 4px 10px; font-family: var(--mono); font-size: 11px; cursor: pointer; border-radius: 3px; white-space: nowrap; }
+.btn:hover { border-color: var(--phosphor-dim); color: var(--phosphor); }
+.btn-phosphor { border-color: var(--phosphor-dim); color: var(--phosphor); }
+.btn-phosphor:hover { background: var(--phosphor-muted); }
+.btn-amber { border-color: var(--amber-dim); color: var(--amber); }
+.btn-amber:hover { background: #3d2810; }
+.drive-status { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--text-dim); }
+.drive-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border2); flex-shrink: 0; }
+.drive-dot.connected { background: var(--phosphor); }
+.drive-dot.syncing { background: var(--amber); animation: pulse 1s step-end infinite; }
+.drive-dot.error { background: var(--red); }
+@keyframes pulse { 50% { opacity: 0.3; } }
+.modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 100; align-items: center; justify-content: center; }
+.modal-overlay.open { display: flex; }
+.modal { background: var(--bg2); border: 1px solid var(--border2); border-radius: 4px; padding: 24px; width: 400px; max-width: 92vw; }
+.modal h3 { color: var(--phosphor); font-size: 13px; margin-bottom: 16px; letter-spacing: 0.1em; text-transform: uppercase; }
+.modal label { display: block; font-size: 11px; color: var(--text-dim); margin-bottom: 4px; margin-top: 12px; }
+.modal input, .modal select, .modal textarea { width: 100%; background: var(--bg3); border: 1px solid var(--border); color: var(--text-bright); padding: 6px 10px; font-family: var(--mono); font-size: 12px; border-radius: 3px; }
+.modal textarea { resize: vertical; min-height: 60px; }
+.modal-actions { display: flex; gap: 8px; margin-top: 16px; justify-content: flex-end; }
+.tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--bg2); padding: 0 16px; }
+.tab { padding: 9px 16px; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--phosphor); border-bottom-color: var(--phosphor); }
+.main { display: flex; flex: 1; overflow: hidden; min-height: 0; }
+.panel { padding: 14px 16px; flex: 1; overflow-y: auto; }
+.panel-hidden { display: none; }
+.section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.section-head h2 { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--phosphor); }
+.photo-drop { border: 1px dashed var(--border2); border-radius: 4px; padding: 24px; text-align: center; cursor: pointer; color: var(--text-dim); font-size: 12px; margin-bottom: 12px; transition: border-color 0.15s, color 0.15s; }
+.photo-drop:hover { border-color: var(--phosphor-dim); color: var(--phosphor); }
+.photo-drop input[type=file] { display: none; }
+.photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.photo-thumb { position: relative; border: 1px solid var(--border); border-radius: 3px; overflow: hidden; cursor: pointer; background: var(--bg3); aspect-ratio: 4/3; }
+.photo-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.photo-thumb .photo-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.7); display: none; flex-direction: column; align-items: center; justify-content: center; gap: 6px; }
+.photo-thumb:hover .photo-overlay { display: flex; }
+.photo-thumb .photo-label-tag { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.7); font-size: 10px; color: var(--phosphor); padding: 2px 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.photo-overlay-btn { background: transparent; border: 1px solid var(--phosphor-dim); color: var(--phosphor); padding: 3px 8px; font-family: var(--mono); font-size: 10px; cursor: pointer; border-radius: 2px; }
+.photo-overlay-btn:hover { background: var(--phosphor-muted); }
+.lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 200; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }
+.lightbox.open { display: flex; }
+.lightbox-img-wrap { position: relative; max-width: 90vw; max-height: 75vh; }
+.lightbox-img-wrap img { max-width: 90vw; max-height: 75vh; object-fit: contain; display: block; }
+.lightbox-canvas { position: absolute; inset: 0; cursor: crosshair; }
+.lightbox-controls { display: flex; gap: 8px; margin-top: 12px; align-items: center; flex-wrap: wrap; justify-content: center; }
+.lightbox-label { background: var(--bg2); border: 1px solid var(--border2); color: var(--text-bright); padding: 4px 10px; font-family: var(--mono); font-size: 11px; border-radius: 3px; min-width: 160px; }
+.lightbox-close { position: absolute; top: 12px; right: 16px; background: none; border: none; color: var(--text-dim); font-size: 20px; cursor: pointer; }
+.lightbox-close:hover { color: var(--text-bright); }
+.pin-list { margin-top: 10px; font-size: 11px; color: var(--text-dim); max-height: 80px; overflow-y: auto; }
+.pin-item { display: flex; gap: 6px; align-items: baseline; padding: 2px 0; }
+.pin-item .pin-coord { color: var(--phosphor-dim); font-size: 10px; }
+.pin-item .pin-text { color: var(--text); }
+.log-input-row { display: flex; gap: 8px; margin-bottom: 12px; align-items: flex-start; }
+.log-type-select { background: var(--bg3); border: 1px solid var(--border); color: var(--text); padding: 5px 8px; font-family: var(--mono); font-size: 11px; border-radius: 3px; min-width: 100px; }
+.log-textarea { flex: 1; background: var(--bg3); border: 1px solid var(--border); color: var(--text-bright); padding: 6px 10px; font-family: var(--mono); font-size: 12px; border-radius: 3px; resize: none; min-height: 60px; }
+.log-textarea:focus { outline: none; border-color: var(--phosphor-dim); }
+.log-entries { display: flex; flex-direction: column; gap: 6px; }
+.log-entry { background: var(--bg3); border: 1px solid var(--border); border-radius: 3px; padding: 8px 10px; border-left-width: 3px; }
+.log-entry.type-symptom { border-left-color: var(--amber); }
+.log-entry.type-measurement { border-left-color: #4db8ff; }
+.log-entry.type-finding { border-left-color: var(--phosphor); }
+.log-entry.type-action { border-left-color: #b08fff; }
+.log-entry.type-note { border-left-color: var(--border2); }
+.log-entry-meta { display: flex; gap: 10px; margin-bottom: 4px; align-items: center; }
+.log-entry-type { font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; padding: 1px 6px; border-radius: 2px; }
+.type-symptom .log-entry-type { background: #3d2810; color: var(--amber); }
+.type-measurement .log-entry-type { background: #0d2540; color: #4db8ff; }
+.type-finding .log-entry-type { background: var(--phosphor-muted); color: var(--phosphor); }
+.type-action .log-entry-type { background: #1e0f40; color: #b08fff; }
+.type-note .log-entry-type { background: var(--bg2); color: var(--text-dim); }
+.log-entry-time { font-size: 10px; color: var(--text-dim); }
+.log-entry-text { font-size: 12px; color: var(--text-bright); line-height: 1.5; }
+.log-entry-del { margin-left: auto; background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 14px; line-height: 1; }
+.log-entry-del:hover { color: var(--red); }
+.parts-add-row { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 6px; margin-bottom: 12px; align-items: end; }
+.parts-add-row label { font-size: 10px; color: var(--text-dim); display: block; margin-bottom: 3px; }
+.parts-add-row input, .parts-add-row select { background: var(--bg3); border: 1px solid var(--border); color: var(--text-bright); padding: 5px 8px; font-family: var(--mono); font-size: 11px; border-radius: 3px; width: 100%; }
+.parts-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.parts-table th { text-align: left; padding: 5px 8px; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim); border-bottom: 1px solid var(--border); }
+.parts-table td { padding: 7px 8px; border-bottom: 1px solid var(--border); color: var(--text); vertical-align: middle; }
+.parts-table tr:hover td { background: var(--bg3); }
+.supplier-link { color: var(--phosphor-dim); font-size: 10px; text-decoration: none; }
+.supplier-link:hover { color: var(--phosphor); text-decoration: underline; }
+.ai-instructions { background: var(--bg3); border: 1px solid var(--border); border-radius: 3px; padding: 10px 12px; font-size: 11px; color: var(--text-dim); margin-bottom: 12px; line-height: 1.6; }
+.ai-instructions span { color: var(--phosphor); }
+.ai-photo-select { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 6px; margin-bottom: 12px; }
+.ai-thumb { border: 1px solid var(--border); border-radius: 3px; overflow: hidden; cursor: pointer; aspect-ratio: 4/3; position: relative; }
+.ai-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ai-thumb.selected { border-color: var(--phosphor); }
+.ai-thumb.selected::after { content: '\u2713'; position: absolute; top: 2px; right: 4px; color: var(--phosphor); font-size: 12px; text-shadow: 0 0 4px #000; }
+.ai-prompt-row { display: flex; gap: 8px; margin-bottom: 12px; }
+.ai-prompt-input { flex: 1; background: var(--bg3); border: 1px solid var(--border); color: var(--text-bright); padding: 6px 10px; font-family: var(--mono); font-size: 12px; border-radius: 3px; }
+.ai-prompt-input:focus { outline: none; border-color: var(--phosphor-dim); }
+.ai-responses { display: flex; flex-direction: column; gap: 10px; }
+.ai-response { background: var(--bg3); border: 1px solid var(--border); border-left: 3px solid var(--phosphor-dim); border-radius: 3px; padding: 10px 12px; }
+.ai-response-meta { font-size: 10px; color: var(--text-dim); margin-bottom: 6px; }
+.ai-response-text { font-size: 12px; color: var(--text-bright); line-height: 1.6; white-space: pre-wrap; }
+.ai-loading { color: var(--phosphor-dim); font-size: 12px; animation: blink 1s step-end infinite; }
+@keyframes blink { 50% { opacity: 0.3; } }
+.statusbar { background: var(--bg2); border-top: 1px solid var(--border); padding: 5px 16px; display: flex; gap: 20px; font-size: 10px; color: var(--text-dim); letter-spacing: 0.05em; align-items: center; }
+.statusbar span { color: var(--phosphor); }
+.empty-state { text-align: center; color: var(--text-dim); font-size: 12px; padding: 32px; border: 1px dashed var(--border); border-radius: 4px; }
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+@media (max-width: 600px) { .parts-add-row { grid-template-columns: 1fr 1fr; } .photo-grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); } }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+<div class="topbar-brand">RSC <span>//</span> Repair Session Companion</div>
+<div class="unit-select-wrap">
+<label>UNIT</label>
+<select id="unitSelect" onchange="switchUnit()"><option value="">— select unit —</option></select>
+</div>
+<button class="btn btn-phosphor" onclick="openNewUnit()">+ New Unit</button>
+<button class="btn" onclick="exportSession()">Export Log</button>
+<div class="drive-status">
+<div class="drive-dot" id="driveDot"></div>
+<span id="driveLabel">Not signed in</span>
+</div>
+<button class="btn" id="driveBtn" onclick="handleDriveAuth()">Sign in to Drive</button>
+</div>
+
+<div class="tabs">
+<div class="tab active" onclick="switchTab('photos')">📷 Photos</div>
+<div class="tab" onclick="switchTab('log')">📋 Session Log</div>
+<div class="tab" onclick="switchTab('parts')">🔩 Parts</div>
+<div class="tab" onclick="switchTab('ai')">⚡ AI Analysis</div>
+</div>
+
+<div class="main">
+<div class="panel" id="panel-photos">
+<div class="section-head">
+<h2>Photo Reference</h2>
+<div id="photoCount" style="font-size:10px;color:var(--text-dim);">0 photos</div>
+</div>
+<label class="photo-drop">
+<input type="file" id="photoInput" accept="image/*" multiple onchange="handlePhotoUpload(event)">
+<div style="font-size:24px;margin-bottom:6px;">⊕</div>
+<div>Drop images here or click to upload</div>
+<div style="font-size:10px;margin-top:4px;color:var(--text-dim);">Upload directly from your device</div>
+</label>
+<div class="photo-grid" id="photoGrid"></div>
+</div>
+
+<div class="panel panel-hidden" id="panel-log">
+<div class="section-head">
+<h2>Session Log</h2>
+<div id="logCount" style="font-size:10px;color:var(--text-dim);">0 entries</div>
+</div>
+<div class="log-input-row">
+<select class="log-type-select" id="logType">
+<option value="symptom">Symptom</option>
+<option value="measurement">Measurement</option>
+<option value="finding" selected>Finding</option>
+<option value="action">Action</option>
+<option value="note">Note</option>
+</select>
+<textarea class="log-textarea" id="logText" placeholder="Enter finding, measurement, symptom or action…" onkeydown="logKeydown(event)"></textarea>
+<button class="btn btn-phosphor" onclick="addLogEntry()" style="align-self:flex-end;">Add</button>
+</div>
+<div class="log-entries" id="logEntries">
+<div class="empty-state" id="logEmpty">No entries yet. Start logging findings as you work.</div>
+</div>
+</div>
+
+<div class="panel panel-hidden" id="panel-parts">
+<div class="section-head">
+<h2>Parts Tracker</h2>
+<div id="partsCount" style="font-size:10px;color:var(--text-dim);">0 components</div>
+</div>
+<div class="parts-add-row">
+<div><label>Component</label><input type="text" id="partName" placeholder="e.g. 47µF 16V electrolytic" /></div>
+<div><label>Location</label><input type="text" id="partLocation" placeholder="e.g. C14" /></div>
+<div><label>Status</label>
+<select id="partStatus">
+<option value="needed">Needed</option>
+<option value="ordered">Ordered</option>
+<option value="on-hand">On Hand</option>
+<option value="installed">Installed</option>
+</select>
+</div>
+<button class="btn btn-phosphor" onclick="addPart()" style="align-self:flex-end;">Add</button>
+</div>
+<table class="parts-table">
+<thead><tr><th>Component</th><th>Ref</th><th>Status</th><th>Source</th><th></th></tr></thead>
+<tbody id="partsBody"><tr id="partsEmpty"><td colspan="5" style="text-align:center;color:var(--text-dim);padding:24px;">No parts logged yet.</td></tr></tbody>
+</table>
+</div>
+
+<div class="panel panel-hidden" id="panel-ai">
+<div class="section-head"><h2>AI Photo Analysis</h2></div>
+<div class="ai-instructions"><span>How it works:</span> Select one or more photos, enter a question, and the AI will analyse the images with component-level commentary. Responses auto-save to your session log.</div>
+<div id="aiPhotoSelect" class="ai-photo-select">
+<div class="empty-state" style="grid-column:1/-1;padding:16px;">Upload photos in the Photos tab first.</div>
+</div>
+<div class="ai-prompt-row">
+<input type="text" class="ai-prompt-input" id="aiPrompt" placeholder="e.g. Identify the cap near the cam gear — does it look damaged?" />
+<button class="btn btn-phosphor" onclick="runAIAnalysis()">Analyse ↗</button>
+</div>
+<div class="ai-responses" id="aiResponses"></div>
+</div>
+</div>
+
+<div class="statusbar">
+<div>Unit: <span id="sbUnit">—</span></div>
+<div>Photos: <span id="sbPhotos">0</span></div>
+<div>Log: <span id="sbLog">0</span></div>
+<div>Parts: <span id="sbParts">0</span></div>
+<div id="sbSaved" style="margin-left:auto;">● Local only</div>
+</div>
+
+<div class="modal-overlay" id="newUnitModal">
+<div class="modal">
+<h3>New Repair Unit</h3>
+<label>Make / Model *</label><input type="text" id="newUnitModel" placeholder="e.g. Yamaha MT120" />
+<label>Serial Number</label><input type="text" id="newUnitSerial" placeholder="optional" />
+<label>Fault Description *</label><textarea id="newUnitFault" placeholder="e.g. Transport clicks but motor does not spin"></textarea>
+<label>Prior History</label><textarea id="newUnitHistory" placeholder="e.g. DeoxIT applied inside unit by previous owner"></textarea>
+<div class="modal-actions">
+<button class="btn" onclick="closeNewUnit()">Cancel</button>
+<button class="btn btn-phosphor" onclick="createUnit()">Create Session</button>
+</div>
+</div>
+</div>
+
+<div class="lightbox" id="lightbox">
+<button class="lightbox-close" onclick="closeLightbox()">✕</button>
+<div class="lightbox-img-wrap" id="lbImgWrap">
+<img id="lbImg" src="" alt="" />
+<canvas id="lbCanvas" class="lightbox-canvas"></canvas>
+</div>
+<div class="lightbox-controls">
+<input type="text" class="lightbox-label" id="pinLabel" placeholder="Pin label (Enter to place)" onkeydown="pinKeydown(event)" />
+<button class="btn btn-phosphor" onclick="dropPin()">Drop Pin</button>
+<button class="btn" onclick="clearPins()">Clear Pins</button>
+<button class="btn btn-amber" onclick="sendToLog()">→ Log Finding</button>
+<button class="btn" onclick="closeLightbox()">Done</button>
+</div>
+<div class="pin-list" id="pinList"></div>
+</div>
+
+<script>
+const CLIENT_ID = '961116648363-7dh6jdj33pltiab1eqrgrlri8q1eprlt.apps.googleusercontent.com';
+const SCOPES = 'https://www.googleapis.com/auth/drive.file';
+const DRIVE_FILENAME = 'repair_companion_data.json';
+const LOCAL_KEY = 'rsc_v1';
+let db = { units: {}, activeUnit: null };
+let driveFileId = null, driveToken = null, syncTimer = null;
+let lightboxPhotoId = null, lbPins = [];
+let selectedAiPhotos = new Set();
+
+function handleDriveAuth() { driveToken ? signOut() : signIn(); }
+
+function signIn() {
+const client = google.accounts.oauth2.initTokenClient({
+client_id: CLIENT_ID, scope: SCOPES,
+callback: async (resp) => {
+if (resp.error) { setDriveStatus('error', 'Auth failed'); return; }
+driveToken = resp.access_token;
+setDriveStatus('syncing', 'Connecting…');
+document.getElementById('driveBtn').textContent = 'Sign out';
+await loadFromDrive();
+}
+});
+client.requestAccessToken();
+}
+
+function signOut() {
+if (driveToken) google.accounts.oauth2.revoke(driveToken);
+driveToken = null; driveFileId = null;
+setDriveStatus('', 'Not signed in');
+document.getElementById('driveBtn').textContent = 'Sign in to Drive';
+setSaved('● Local only');
+}
+
+function setDriveStatus(state, label) {
+const dot = document.getElementById('driveDot');
+dot.className = 'drive-dot' + (state ? ' ' + state : '');
+document.getElementById('driveLabel').textContent = label;
+}
+
+async function driveReq(method, url, body, headers = {}) {
+const res = await fetch(url, { method, headers: { 'Authorization': 'Bearer ' + driveToken, ...headers }, body });
+if (!res.ok) throw new Error('Drive API ' + res.status);
+const ct = res.headers.get('content-type') || '';
+return ct.includes('application/json') ? res.json() : res.text();
+}
+
+async function findDriveFile() {
+const q = encodeURIComponent("name='" + DRIVE_FILENAME + "' and trashed=false");
+const data = await driveReq('GET', 'https://www.googleapis.com/drive/v3/files?q=' + q + '&fields=files(id,name)');
+return data.files && data.files.length > 0 ? data.files[0].id : null;
+}
+
+async function loadFromDrive() {
+try {
+driveFileId = await findDriveFile();
+if (driveFileId) {
+const content = await driveReq('GET', 'https://www.googleapis.com/drive/v3/files/' + driveFileId + '?alt=media');
+db = typeof content === 'string' ? JSON.parse(content) : content;
+if (!db.units) db.units = {};
+saveLocal();
+setDriveStatus('connected', 'Drive synced');
+setSaved('● Drive synced');
+} else {
+setDriveStatus('connected', 'Drive ready');
+await saveToDrive();
+}
+rebuildUnitSelect(); refreshAll();
+} catch(e) { setDriveStatus('error', 'Sync failed'); console.error(e); }
+}
+
+async function saveToDrive() {
+if (!driveToken) return;
+setDriveStatus('syncing', 'Saving…');
+try {
+const boundary = 'rsc_b_' + Date.now();
+const body = '--' + boundary + '\r\nContent-Type: application/json\r\n\r\n' +
+JSON.stringify({ name: DRIVE_FILENAME, mimeType: 'application/json' }) +
+'\r\n--' + boundary + '\r\nContent-Type: application/json\r\n\r\n' +
+JSON.stringify(db) + '\r\n--' + boundary + '--';
+const headers = { 'Content-Type': 'multipart/related; boundary=' + boundary };
+if (driveFileId) {
+await driveReq('PATCH', 'https://www.googleapis.com/upload/drive/v3/files/' + driveFileId + '?uploadType=multipart', body, headers);
+} else {
+const r = await driveReq('POST', 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', body, headers);
+driveFileId = r.id;
+}
+setDriveStatus('connected', 'Drive synced');
+setSaved('● Drive synced ' + new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}));
+} catch(e) { setDriveStatus('error', 'Save failed'); setSaved('⚠ Drive save failed'); console.error(e); }
+}
+
+function scheduleDriveSync() { clearTimeout(syncTimer); syncTimer = setTimeout(saveToDrive, 1500); }
+
+function saveLocal() {
+try {
+const copy = JSON.parse(JSON.stringify(db));
+Object.values(copy.units || {}).forEach(u => { if (u.photos) u.photos = []; });
+localStorage.setItem(LOCAL_KEY, JSON.stringify(copy));
+} catch(e) {}
+}
+
+function loadLocal() {
+try { const raw = localStorage.getItem(LOCAL_KEY); if (raw) db = JSON.parse(raw); } catch(e) {}
+if (!db.units) db.units = {};
+}
+
+function saveDB() {
+saveLocal();
+setSaved('● Saving…');
+if (driveToken) scheduleDriveSync(); else setSaved('● Saved locally');
+}
+
+function setSaved(msg) { document.getElementById('sbSaved').textContent = msg; }
+function getUnit() { return db.activeUnit ? db.units[db.activeUnit] : null; }
+function openNewUnit() { document.getElementById('newUnitModal').classList.add('open'); }
+function closeNewUnit() { document.getElementById('newUnitModal').classList.remove('open'); }
+
+function createUnit() {
+const model = document.getElementById('newUnitModel').value.trim();
+const fault = document.getElementById('newUnitFault').value.trim();
+if (!model || !fault) { alert('Model and fault description are required.'); return; }
+const id = 'u' + Date.now();
+db.units[id] = { id, model, serial: document.getElementById('newUnitSerial').value.trim(), fault, history: document.getElementById('newUnitHistory').value.trim(), created: new Date().toISOString(), log: [], parts: [], photos: [] };
+db.activeUnit = id; saveDB(); closeNewUnit();
+['newUnitModel','newUnitSerial','newUnitFault','newUnitHistory'].forEach(i => document.getElementById(i).value = '');
+rebuildUnitSelect(); refreshAll();
+}
+
+function rebuildUnitSelect() {
+const sel = document.getElementById('unitSelect');
+sel.innerHTML = '<option value="">— select unit —</option>';
+Object.values(db.units).forEach(u => {
+const opt = document.createElement('option');
+opt.value = u.id; opt.textContent = u.model + (u.serial ? ' [' + u.serial + ']' : '');
+if (u.id === db.activeUnit) opt.selected = true;
+sel.appendChild(opt);
+});
+}
+
+function switchUnit() { db.activeUnit = document.getElementById('unitSelect').value || null; saveDB(); refreshAll(); }
+
+function refreshAll() {
+const u = getUnit();
+document.getElementById('sbUnit').textContent = u ? u.model : '—';
+renderPhotos(); renderLog(); renderParts(); renderAiPhotoSelect(); updateCounts();
+}
+
+function updateCounts() {
+const u = getUnit();
+const p = u?(u.photos||[]).length:0, l = u?(u.log||[]).length:0, c = u?(u.parts||[]).length:0;
+document.getElementById('photoCount').textContent = p + ' photo' + (p!==1?'s':'');
+document.getElementById('logCount').textContent = l + ' entr' + (l!==1?'ies':'y');
+document.getElementById('partsCount').textContent = c + ' component' + (c!==1?'s':'');
+document.getElementById('sbPhotos').textContent = p;
+document.getElementById('sbLog').textContent = l;
+document.getElementById('sbParts').textContent = c;
+}
+
+function switchTab(name) {
+const names = ['photos','log','parts','ai'];
+document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', names[i]===name));
+document.querySelectorAll('.panel').forEach(p => p.classList.add('panel-hidden'));
+document.getElementById('panel-' + name).classList.remove('panel-hidden');
+}
+
+function handlePhotoUpload(e) {
+const u = getUnit(); if (!u) { alert('Select or create a repair unit first.'); return; }
+let done = 0; const files = Array.from(e.target.files);
+files.forEach(f => {
+const reader = new FileReader();
+reader.onload = ev => {
+if (!u.photos) u.photos = [];
+u.photos.push({ id: 'p'+Date.now()+Math.random(), name: f.name, dataUrl: ev.target.result, pins: [] });
+if (++done === files.length) { saveDB(); renderPhotos(); renderAiPhotoSelect(); updateCounts(); }
+};
+reader.readAsDataURL(f);
+});
+e.target.value = '';
+}
+
+function renderPhotos() {
+const grid = document.getElementById('photoGrid'); grid.innerHTML = '';
+const u = getUnit(); if (!u||!u.photos||!u.photos.length) return;
+u.photos.forEach(p => {
+const div = document.createElement('div'); div.className = 'photo-thumb';
+div.innerHTML = '<img src="'+p.dataUrl+'" alt="'+p.name+'" /><div class="photo-overlay"><button class="photo-overlay-btn" onclick="openLightbox(\''+p.id+'\')">View / Pin</button><button class="photo-overlay-btn" onclick="deletePhoto(\''+p.id+'\')">Delete</button></div><div class="photo-label-tag">'+p.name+'</div>';
+grid.appendChild(div);
+});
+}
+
+function deletePhoto(pid) {
+const u = getUnit(); if (!u) return;
+u.photos = u.photos.filter(p => p.id !== pid);
+saveDB(); renderPhotos(); renderAiPhotoSelect(); updateCounts();
+}
+
+function openLightbox(pid) {
+const u = getUnit(); if (!u) return;
+const photo = u.photos.find(p => p.id === pid); if (!photo) return;
+lightboxPhotoId = pid; lbPins = JSON.parse(JSON.stringify(photo.pins||[]));
+document.getElementById('lightbox').classList.add('open');
+const img = document.getElementById('lbImg'); img.src = photo.dataUrl;
+img.onload = () => { setupCanvas(); drawPins(); renderPinList(); };
+}
+
+function closeLightbox() {
+const u = getUnit();
+if (u && lightboxPhotoId) { const photo = u.photos.find(p => p.id===lightboxPhotoId); if (photo) { photo.pins = JSON.parse(JSON.stringify(lbPins)); saveDB(); } }
+document.getElementById('lightbox').classList.remove('open'); lightboxPhotoId = null;
+}
+
+function setupCanvas() {
+const img = document.getElementById('lbImg'), canvas = document.getElementById('lbCanvas');
+canvas.width = img.offsetWidth; canvas.height = img.offsetHeight; canvas.onclick = canvasClick;
+}
+
+function canvasClick(e) {
+const rect = e.target.getBoundingClientRect();
+const x = ((e.clientX-rect.left)/rect.width*100).toFixed(1);
+const y = ((e.clientY-rect.top)/rect.height*100).toFixed(1);
+lbPins.push({ x:parseFloat(x), y:parseFloat(y), label: document.getElementById('pinLabel').value.trim()||'?' });
+drawPins(); renderPinList();
+}
+
+function dropPin() { const l=document.getElementById('pinLabel'); if (!l.value.trim()) { l.focus(); return; } l.value=''; }
+function pinKeydown(e) { if (e.key==='Enter') dropPin(); }
+function clearPins() { lbPins=[]; drawPins(); renderPinList(); }
+
+function drawPins() {
+const canvas=document.getElementById('lbCanvas'), ctx=canvas.getContext('2d');
+ctx.clearRect(0,0,canvas.width,canvas.height);
+lbPins.forEach((p,i) => {
+const px=p.x/100*canvas.width, py=p.y/100*canvas.height;
+ctx.beginPath(); ctx.arc(px,py,8,0,Math.PI*2);
+ctx.fillStyle='rgba(57,255,133,0.25)'; ctx.fill();
+ctx.strokeStyle='#39ff85'; ctx.lineWidth=1.5; ctx.stroke();
+ctx.fillStyle='#39ff85'; ctx.font='bold 10px Courier New';
+ctx.fillText((i+1).toString(),px+10,py+4);
+});
+}
+
+function renderPinList() {
+const el=document.getElementById('pinList');
+el.innerHTML = lbPins.length ? lbPins.map((p,i)=>'<div class="pin-item"><span class="pin-coord">['+(i+1)+']</span><span class="pin-text">'+p.label+'</span></div>').join('') : '<div style="font-size:10px;color:var(--text-dim);">Click image to drop a pin.</div>';
+}
+
+function sendToLog() {
+const u=getUnit(); if (!u||!lbPins.length) return;
+addLogEntryDirect('finding','Photo annotation: '+lbPins.map((p,i)=>'['+(i+1)+'] '+p.label).join(' | '));
+closeLightbox(); switchTab('log');
+}
+
+function logKeydown(e) { if (e.key==='Enter'&&!e.shiftKey) { e.preventDefault(); addLogEntry(); } }
+
+function addLogEntry() {
+const u=getUnit(); if (!u) { alert('Select or create a repair unit first.'); return; }
+const text=document.getElementById('logText').value.trim(); if (!text) return;
+addLogEntryDirect(document.getElementById('logType').value, text);
+document.getElementById('logText').value='';
+}
+
+function addLogEntryDirect(type,text) {
+const u=getUnit(); if (!u) return;
+if (!u.log) u.log=[];
+u.log.unshift({ id:'l'+Date.now(), type, text, time:new Date().toISOString() });
+saveDB(); renderLog(); updateCounts();
+}
+
+function renderLog() {
+const container=document.getElementById('logEntries'), u=getUnit();
+if (!u||!u.log||!u.log.length) { container.innerHTML=''; container.appendChild(document.getElementById('logEmpty')); return; }
+container.innerHTML=u.log.map(e=>'<div class="log-entry type-'+e.type+'"><div class="log-entry-meta"><span class="log-entry-type">'+e.type+'</span><span class="log-entry-time">'+new Date(e.time).toLocaleString([],{month:\'short\',day:\'numeric\',hour:\'2-digit\',minute:\'2-digit\'})+'</span><button class="log-entry-del" onclick="deleteLogEntry(\''+e.id+'\')">✕</button></div><div class="log-entry-text">'+escHtml(e.text)+'</div></div>').join('');
+}
+
+function deleteLogEntry(id) {
+const u=getUnit(); if (!u) return;
+u.log=u.log.filter(e=>e.id!==id); saveDB(); renderLog(); updateCounts();
+}
+
+function addPart() {
+const u=getUnit(); if (!u) { alert('Select or create a repair unit first.'); return; }
+const name=document.getElementById('partName').value.trim(); if (!name) return;
+if (!u.parts) u.parts=[];
+u.parts.push({ id:'c'+Date.now(), name, location:document.getElementById('partLocation').value.trim(), status:document.getElementById('partStatus').value });
+saveDB(); document.getElementById('partName').value=''; document.getElementById('partLocation').value='';
+renderParts(); updateCounts();
+}
+
+function updatePartStatus(id,val) {
+const u=getUnit(); if (!u) return;
+const p=u.parts.find(p=>p.id===id); if (p) { p.status=val; saveDB(); renderParts(); }
+}
+
+function deletePart(id) {
+const u=getUnit(); if (!u) return;
+u.parts=u.parts.filter(p=>p.id!==id); saveDB(); renderParts(); updateCounts();
+}
+
+function renderParts() {
+const tbody=document.getElementById('partsBody'), u=getUnit();
+if (!u||!u.parts||!u.parts.length) { tbody.innerHTML='<tr id="partsEmpty"><td colspan="5" style="text-align:center;color:var(--text-dim);padding:24px;">No parts logged yet.</td></tr>'; return; }
+tbody.innerHTML=u.parts.map(p=>'<tr><td style="color:var(--text-bright);">'+escHtml(p.name)+'</td><td style="color:var(--text-dim);">'+escHtml(p.location)+'</td><td><select onchange="updatePartStatus(\''+p.id+'\',this.value)" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:2px 6px;font-family:var(--mono);font-size:10px;border-radius:2px;">'+['needed','ordered','on-hand','installed'].map(s=>'<option value="'+s+'"'+(p.status===s?' selected':'')+'>'+s+'</option>').join('')+'</select></td><td><a class="supplier-link" href="https://kpcomponents.co" target="_blank">KP</a>&nbsp;<a class="supplier-link" href="https://leeselectronic.com" target="_blank">Lee\'s</a></td><td><button class="log-entry-del" onclick="deletePart(\''+p.id+'\')">✕</button></td></tr>').join('');
+}
+
+function renderAiPhotoSelect() {
+const container=document.getElementById('aiPhotoSelect'), u=getUnit();
+if (!u||!u.photos||!u.photos.length) { container.innerHTML='<div class="empty-state" style="grid-column:1/-1;padding:16px;">Upload photos in the Photos tab first.</div>'; return; }
+container.innerHTML=u.photos.map(p=>'<div class="ai-thumb'+(selectedAiPhotos.has(p.id)?' selected':'')+'" onclick="toggleAiPhoto(\''+p.id+'\')"><img src="'+p.dataUrl+'" alt="'+p.name+'" /></div>').join('');
+}
+
+function toggleAiPhoto(pid) { if (selectedAiPhotos.has(pid)) selectedAiPhotos.delete(pid); else selectedAiPhotos.add(pid); renderAiPhotoSelect(); }
+
+async function runAIAnalysis() {
+const u=getUnit(); if (!u) { alert('Select a unit first.'); return; }
+const prompt=document.getElementById('aiPrompt').value.trim(); if (!prompt) { alert('Enter a question or prompt.'); return; }
+const photoIds=Array.from(selectedAiPhotos); if (!photoIds.length) { alert('Select at least one photo to analyse.'); return; }
+const photos=(u.photos||[]).filter(p=>photoIds.includes(p.id));
+const loadingEl=document.createElement('div'); loadingEl.className='ai-response';
+loadingEl.innerHTML='<div class="ai-response-meta">Analysing…</div><div class="ai-loading">⚡ Sending to AI — please wait…</div>';
+document.getElementById('aiResponses').prepend(loadingEl);
+const sys='You are a professional vintage audio repair technician with expertise in cassette decks, mixers, amplifiers, turntables, and tape transport mechanisms. Provide precise, component-level technical observations: identify components, flag visible faults, worn parts, dry joints, damaged capacitors, contamination, or mechanical issues. Be specific. If something is unclear, say so rather than guessing. Current repair unit: '+u.model+(u.serial?' S/N: '+u.serial:'')+'. Known fault: '+u.fault+'.';
+const blocks=photos.map(p=>({ type:'image', source:{ type:'base64', media_type:guessMediaType(p.dataUrl), data:p.dataUrl.split(',')[1] } }));
+blocks.push({ type:'text', text:prompt });
+try {
+const res=await fetch('https://api.anthropic.com/v1/messages',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:1000, system:sys, messages:[{ role:'user', content:blocks }] }) });
+const data=await res.json();
+const text=data.content?.map(b=>b.text||'').join('')||'No response returned.';
+loadingEl.innerHTML='<div class="ai-response-meta">'+new Date().toLocaleString([],{month:\'short\',day:\'numeric\',hour:\'2-digit\',minute:\'2-digit\'})+'  · '+photos.length+' photo'+(photos.length!==1?'s':'')+' · "'+escHtml(prompt.substring(0,60))+(prompt.length>60?'…':'')+'"</div><div class="ai-response-text">'+escHtml(text)+'</div>';
+addLogEntryDirect('finding','[AI Analysis] '+prompt+'\n\u2192 '+text.substring(0,300)+(text.length>300?'…':''));
+} catch(err) { loadingEl.innerHTML='<div class="ai-response-meta">Error</div><div class="ai-response-text" style="color:var(--red);">Request failed: '+err.message+'</div>'; }
+}
+
+function guessMediaType(d) { if (d.startsWith('data:image/png')) return 'image/png'; if (d.startsWith('data:image/webp')) return 'image/webp'; if (d.startsWith('data:image/gif')) return 'image/gif'; return 'image/jpeg'; }
+
+function exportSession() {
+const u=getUnit(); if (!u) { alert('No unit selected.'); return; }
+let txt='REPAIR SESSION EXPORT\n=====================\nUnit: '+u.model+(u.serial?' ['+u.serial+']':'')+' \nFault: '+u.fault+'\n'+(u.history?'History: '+u.history+'\n':'')+'Exported: '+new Date().toLocaleString()+'\n\nSESSION LOG ('+(u.log||[]).length+' entries)\n─────────────────────\n';
+(u.log||[]).slice().reverse().forEach(e=>{ txt+='['+e.type.toUpperCase()+'] '+new Date(e.time).toLocaleString()+'\n'+e.text+'\n\n'; });
+txt+='PARTS TRACKER ('+(u.parts||[]).length+' components)\n─────────────────────\n';
+(u.parts||[]).forEach(p=>{ txt+=p.name+(p.location?' @ '+p.location:'')+' — '+p.status+'\n'; });
+const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([txt],{type:'text/plain'})); a.download=u.model.replace(/[^a-z0-9]/gi,'_')+'_repair_log.txt'; a.click();
+}
+
+function escHtml(str) { return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+loadLocal(); rebuildUnitSelect(); refreshAll();
+</script>
+</body>
+</html>
